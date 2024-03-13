@@ -19,6 +19,8 @@
 , pkg-config
 , autoconf
 , automake
+, meson
+, ninja
 , libtool
 , m4
 , xz
@@ -26,7 +28,7 @@
 , numactl
 , writeText
   # Processing, video codecs, containers
-, ffmpeg_5-full
+, ffmpeg_6-full
 , nv-codec-headers
 , libogg
 , x264
@@ -76,7 +78,9 @@
 , libappindicator-gtk3
 , libnotify
 , gst_all_1
+, bzip2
 , dbus-glib
+, desktop-file-utils
 , udev
 , libgudev
 , hicolor-icon-theme
@@ -86,61 +90,62 @@
 }:
 
 let
-  version = "1.6.1";
+  version = "1.7.3";
 
   src = fetchFromGitHub {
     owner = "HandBrake";
     repo = "HandBrake";
     rev = version;
-    sha256 = "sha256-0MJ1inMNA6s8l2S0wnpM2c7FxOoOHxs9u4E/rgKfjJo=";
+    sha256 = "sha256-4Q//UU/CPgWvhtpROfNPLzBvZlB02hbFe9Z9FA7mX04=";
   };
 
   # Handbrake maintains a set of ffmpeg patches. In particular, these
   # patches are required for subtitle timing to work correctly. See:
   # https://github.com/HandBrake/HandBrake/issues/4029
-  ffmpeg-version = "5.1.2";
-  ffmpeg-hb = ffmpeg_5-full.overrideAttrs (old: {
+  ffmpeg-version = "6.1.1";
+  ffmpeg-hb = ffmpeg_6-full.overrideAttrs (old: {
     version = ffmpeg-version;
     src = fetchurl {
       url = "https://www.ffmpeg.org/releases/ffmpeg-${ffmpeg-version}.tar.bz2";
-      hash = "sha256-OaC8yNmFSfFsVwYkZ4JGpqxzbAZs69tAn5UC6RWyLys=";
+      hash = "sha256-XjEzk5ph72Ssm0f/0ppepuM3pAI+8K2XIJS02oROOiA=";
     };
+    # Not using `old.patches or [ ] ++ ` because the only patch currently
+    # in ffmpeg_6 is already present in 6.1.1
+    patches = [
+      "${src}/contrib/ffmpeg/A01-mov-read-name-track-tag-written-by-movenc.patch"
+      "${src}/contrib/ffmpeg/A02-movenc-write-3gpp-track-titl-tag.patch"
+      "${src}/contrib/ffmpeg/A03-mov-read-3gpp-udta-tags.patch"
+      "${src}/contrib/ffmpeg/A04-movenc-write-3gpp-track-names-tags-for-all-available.patch"
+      "${src}/contrib/ffmpeg/A05-dvdsubdec-fix-processing-of-partial-packets.patch"
+      "${src}/contrib/ffmpeg/A06-dvdsubdec-return-number-of-bytes-used.patch"
+      "${src}/contrib/ffmpeg/A07-dvdsubdec-use-pts-of-initial-packet.patch"
+      "${src}/contrib/ffmpeg/A08-ccaption_dec-fix-pts-in-real_time-mode.patch"
+      "${src}/contrib/ffmpeg/A09-matroskaenc-aac-extradata-updated.patch"
+      "${src}/contrib/ffmpeg/A10-amfenc-Add-support-for-pict_type-field.patch"
+      "${src}/contrib/ffmpeg/A11-amfenc-Fixes-the-color-information-in-the-ou.patch"
+      "${src}/contrib/ffmpeg/A12-amfenc-HDR-metadata.patch"
+      "${src}/contrib/ffmpeg/A13-libavcodec-amfenc-Fix-issue-with-missing-headers-in-.patch"
+      "${src}/contrib/ffmpeg/A14-avcodec-add-ambient-viewing-environment-packet-side-.patch"
+      "${src}/contrib/ffmpeg/A15-avformat-mov-add-support-for-amve-ambient-viewing-en.patch"
+      "${src}/contrib/ffmpeg/A16-videotoolbox-dec-h264.patch"
+      "${src}/contrib/ffmpeg/A17-libswscale-fix-yuv420p-to-p01xle-color-conversion-bu.patch"
+      "${src}/contrib/ffmpeg/A18-qsv-fix-decode-10bit-hdr.patch"
+      "${src}/contrib/ffmpeg/A19-ffbuild-common-use-gzip-n-flag-for-cuda.patch"
+      ./ffmpeg-p01xle-tests.patch
+    ];
+  });
+
+  x265-hb = x265.overrideAttrs (old: {
+    prePatch = old.prePatch or "" + ''
+      ln -s . source
+    '';
     patches = old.patches or [ ] ++ [
-      "${src}/contrib/ffmpeg/A01-qsv-libavfilter-qsvvpp-change-the-output-frame-s-width-a.patch"
-      "${src}/contrib/ffmpeg/A02-qsv-configure-ensure-enable-libmfx-uses-libmfx-1.x.patch"
-      "${src}/contrib/ffmpeg/A03-qsv-configure-fix-the-check-for-MFX_CODEC_VP9.patch"
-      "${src}/contrib/ffmpeg/A04-qsv-remove-mfx-prefix-from-mfx-headers.patch"
-      "${src}/contrib/ffmpeg/A05-qsv-load-user-plugin-for-MFX_VERSION-2.0.patch"
-      "${src}/contrib/ffmpeg/A06-qsv-build-audio-related-code-when-MFX_VERSION-2.0.patch"
-      "${src}/contrib/ffmpeg/A07-qsvenc-support-multi-frame-encode-when-MFX_VERSION-2.patch"
-      "${src}/contrib/ffmpeg/A08-qsvenc-support-MFX_RATECONTROL_LA_EXT-when-MFX_VERSI.patch"
-      "${src}/contrib/ffmpeg/A09-qsv-support-OPAQUE-memory-when-MFX_VERSION-2.0.patch"
-      "${src}/contrib/ffmpeg/A10-qsv-configure-add-enable-libvpl-option.patch"
-      "${src}/contrib/ffmpeg/A11-qsv-use-a-new-method-to-create-mfx-session-when-usin.patch"
-      "${src}/contrib/ffmpeg/A12-qsv-fix-decode-10bit-hdr.patch"
-      "${src}/contrib/ffmpeg/A13-mov-read-name-track-tag-written-by-movenc.patch"
-      "${src}/contrib/ffmpeg/A14-movenc-write-3gpp-track-titl-tag.patch"
-      "${src}/contrib/ffmpeg/A15-mov-read-3gpp-udta-tags.patch"
-      "${src}/contrib/ffmpeg/A16-movenc-write-3gpp-track-names-tags-for-all-available.patch"
-      "${src}/contrib/ffmpeg/A17-FFmpeg-devel-amfenc-Add-support-for-pict_type-field.patch"
-      "${src}/contrib/ffmpeg/A18-dvdsubdec-fix-processing-of-partial-packets.patch"
-      "${src}/contrib/ffmpeg/A19-ccaption_dec-return-number-of-bytes-used.patch"
-      "${src}/contrib/ffmpeg/A20-dvdsubdec-return-number-of-bytes-used.patch"
-      "${src}/contrib/ffmpeg/A21-dvdsubdec-use-pts-of-initial-packet.patch"
-      "${src}/contrib/ffmpeg/A22-matroskaenc-aac-extradata-updated.patch"
-      "${src}/contrib/ffmpeg/A23-ccaption_dec-fix-pts-in-real_time-mode.patch"
-      "${src}/contrib/ffmpeg/A24-fix-eac3-dowmix.patch"
-      "${src}/contrib/ffmpeg/A25-enable-truehd-pass.patch"
-      "${src}/contrib/ffmpeg/A26-Update-the-min-version-to-1.4.23.0-for-AMF-SDK.patch"
-      "${src}/contrib/ffmpeg/A27-avcodec-amfenc-Fixes-the-color-information-in-the-ou.patch"
-      "${src}/contrib/ffmpeg/A28-avcodec-amfenc-HDR-metadata.patch"
-      # This patch is not applying since ffmpeg 5.1.1, probably it was backported by upstream
-      # "${src}/contrib/ffmpeg/A30-svt-av1-backports.patch"
-      (fetchpatch {
-        name = "vulkan-remove-extensions.patch";
-        url = "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff_plain/eb0455d64690";
-        hash = "sha256-qvLrb7b+9/bel8A2lZuSmBiJtHXsABw0Lvgn1ggnmCU=";
-      })
+      #"${src}/contrib/x265/A00-crosscompile-fix.patch"
+      "${src}/contrib/x265/A01-threads-priority.patch"
+      "${src}/contrib/x265/A02-threads-pool-adjustments.patch"
+      "${src}/contrib/x265/A03-sei-length-crash-fix.patch"
+      "${src}/contrib/x265/A04-ambient-viewing-enviroment-sei.patch"
+      #"${src}/contrib/x265/A05-memory-leaks.patch"
     ];
   });
 
@@ -172,9 +177,19 @@ let
 
       # Force using nixpkgs dependencies
       sed -i '/MODULES += contrib/d' make/include/main.defs
-      sed -e 's/^[[:space:]]*\(meson\|ninja\|nasm\)[[:space:]]*= ToolProbe.*$//g' \
+      sed -i "s~, hb_dir / 'contrib/\(lib\|include\)'~~" gtk/meson.build
+
+      # Remove nasm, cmake dependencies
+      sed -e 's/^[[:space:]]*\(nasm\)[[:space:]]*= ToolProbe.*$//g' \
           -e '/    ## Additional library and tool checks/,/    ## MinGW specific library and tool checks/d' \
           -i make/configure.py
+    '' + optionalString (!useGtk) ''
+      # Remove meson, ninja dependencies
+      sed -e 's/^[[:space:]]*\(meson\|ninja\)[[:space:]]*= ToolProbe.*$//g' \
+          -i make/configure.py
+    '' + optionalString useGtk ''
+      # Use nixpkgs dependencies
+      echo "GTK.CONFIGURE.extra += -Dextra-libdirs=${lame.lib}/lib,${bzip2.out}/lib" >> gtk/module.defs
     '' + optionalString stdenv.isDarwin ''
       # Use the Nix-provided libxml2 instead of the patched version available on
       # the Handbrake website.
@@ -199,7 +214,11 @@ let
       pkg-config
       python3
     ]
-    ++ optionals useGtk [ intltool wrapGAppsHook ];
+    ++ optionals useGtk [ intltool wrapGAppsHook meson ninja ];
+
+    dontUseMesonConfigure = true;
+    dontUseNinjaBuild = true;
+    dontUseNinjaInstall = true;
 
     buildInputs = [
       a52dec
@@ -228,13 +247,15 @@ let
       speex
       svt-av1
       x264
-      x265
+      x265-hb
       xz
       zimg
     ]
     ++ optional (!stdenv.isDarwin) numactl
     ++ optionals useGtk [
+      bzip2
       dbus-glib
+      desktop-file-utils
       glib
       gst_all_1.gst-plugins-base
       gst_all_1.gstreamer
@@ -254,7 +275,6 @@ let
     configureFlags = [
       "--disable-df-fetch"
       "--disable-df-verify"
-      "--disable-gtk-update-checks"
     ]
     ++ optional (!useGtk) "--disable-gtk"
     ++ optional useFdk "--enable-fdk-aac"
